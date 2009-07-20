@@ -107,6 +107,10 @@ class Pile
   def card
     @cards.pop
   end
+
+  def empty?
+    @cards.length == 0
+  end 
 end
 
 class Game
@@ -152,15 +156,61 @@ end
 
 Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
   def activate(pile_number)
-    if @board.source_pile and @board.source_pile == @board.piles[pile_number]
-      @board.source_pile = nil
-      @borders[pile_number].hide
-    else
-      @board.source_pile = @board.piles[pile_number]
-      @borders.each do |border|
-        border.hide
+    @board.source_pile = @board.piles[pile_number]
+    @borders.each do |border|
+      border.hide
+    end
+    @borders[pile_number].show
+  end
+
+  def deactivate(pile_number)
+    @board.source_pile = nil
+    @borders[pile_number].hide
+  end
+
+  def play(pile_number)
+    card = @board.source_pile.card
+
+    if (1 .. 4) === pile_number
+      if @board.piles[pile_number].card.value + to == card.value
+        @board.piles[pile_number] << card
+        @images[pile_number] = card.image
+      else
+#        puts "Against the rules!"
       end
-      @borders[pile_number].show
+    elsif (5 .. 8) === pile_number
+      @board.piles[pile_number] << card
+      @images[pile_number] = card.image
+    else 
+#      puts "Wrong 'to' pile!"
+    end
+    deactivate(pile_number)
+  end
+
+  def action(pile_number)
+    pile_groups = [[0], [1, 2, 3, 4], [5, 6, 7, 8]]
+    if @board.source_pile.nil?
+      if pile_groups[0].include?(pile_number)
+        activate(pile_number)
+      elsif pile_groups[2].include?(pile_number) and !@board.piles[pile_number].empty?
+        activate(pile_number)
+      else
+        # incorrect move
+      end
+    elsif @board.source_pile == @board.deck
+      if pile_groups[0].include?(pile_number)
+        deactivate(pile_number)
+      else
+        play(pile_number)
+      end
+    else
+      if pile_groups[1].include?(pile_number)
+        play(pile_number)
+      elsif pile_groups[2].include?(pile_number)
+        activate(pile_number)
+      else
+        # incorrect move
+      end
     end
   end
 
@@ -168,6 +218,7 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
 #  @game = Game.new
   @board = Board.new 
   @borders = Array.new
+  @images = Array.new
 
   stack :width => 1.0 do
     flow :top => 0.01, :left => 0.01 do
@@ -175,7 +226,7 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
       flow :width => 0.4 do
         flow :width => Card::WIDTH, :height => Card::HEIGHT do 
           # deck
-          image @board.deck.card.image
+          @images[0] = image @board.deck.card.image
           @borders[0] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
           @borders[0].hide
           click do
@@ -189,7 +240,7 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
           left = (i - 1) * 0.2
           left += (i - 1) * 0.01 if i > 1
           stack :left => left, :width => Card::WIDTH, :height => Card::HEIGHT do
-            image @board.piles[i].card.image
+            @images[i] = image @board.piles[i].card.image
             @borders[i] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
             @borders[i].hide
             click do
@@ -206,7 +257,7 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
         left = (i - 5) * 0.2
         left += (i - 5) * 0.01 if i - 5 > 0
         stack :left => left, :width => Card::WIDTH, :height => Card::HEIGHT do
-          image 'cards/empty.png'
+          @images[i] = image 'cards/empty.png'
           @borders[i] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
           @borders[i].hide
           click do
