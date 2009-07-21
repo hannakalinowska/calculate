@@ -7,9 +7,6 @@ class Card
 
   attr_accessor :value, :colour
 
-  @@width = 100;
-  @@height = 130;
-
   def initialize(value = nil, colour = nil)
     @value = value || rand(13) + 1
     @colour = colour || rand(4)
@@ -51,49 +48,33 @@ class Card
       value.to_s
     end
 
-#    text += case colour
-#            when 0: ♥
-#            when 1: ♦
-#            when 2: ♠
-#            when 3: ♣
-#            end
     text = "#{text}.#{colour}"
     text
   end
 
+  # cards that are set at the start of the game
   def self.restricted?(value, colour)
     return true if [[1, 0], [2, 2], [3, 1], [4, 0]].include?([value, colour])
     return false
   end
 end
 
-class Deck
-  attr_accessor :cards
-
-  def initialize(random = true)
-    @cards = Array.new
-    0.upto(51) do |i|
-      @cards << Card.new((i % 13) + 1, i / 13) unless Card.restricted?((i % 13) + 1, i / 13)
-    end
-    if random
-      @cards.shuffle!
-    end
-  end
-
-  def first
-    @cards.first
-  end
-
-  def card
-    @cards.shift
-  end
-end
-
-class Pile 
-  attr_accessor :cards
+class Pile
+  attr_accessor :cards, :image
   
-  def initialize 
+  def initialize(border)
     @cards = Array.new
+    @border = border
+    @border.hide
+    @image = nil
+  end
+
+  def activate
+    @border.show
+  end
+
+  def deactivate
+    @border.hide
   end
 
   def last
@@ -102,15 +83,80 @@ class Pile
 
   def <<(card)
     @cards << card
+    Shoes.debug(card)
+    @image.path = @cards.last.image unless @image.nil?
   end
 
   def card
-    @cards.pop
+    @cards.last
   end
 
-  def empty?
-    @cards.length == 0
+  def card!
+    card = @cards.pop
+    @image.path = @cards.last.image
+    card
+  end
+
+  def has_cards_left?
+    !@cards.empty?
+  end
+
+  def is_deck?
+    false
   end 
+
+  def is_bottom_pile?
+    false
+  end
+
+  def is_top_pile?
+    false
+  end
+end
+
+class Deck < Pile 
+  def initialize(border, random = true)
+    @cards = Array.new
+    0.upto(51) do |i|
+      @cards << Card.new((i % 13) + 1, i / 13) unless Card.restricted?((i % 13) + 1, i / 13)
+    end
+    if random
+      @cards.shuffle!
+    end
+
+    @border = border
+    @border.hide
+  end
+
+  def first
+    @cards.first
+  end
+
+  def card
+    @cards.first
+  end
+
+  def card!
+    card = @cards.shift
+    @image.path = @cards.first.image
+    card
+  end
+
+  def is_deck?
+    true
+  end
+end
+
+class TopPile < Pile
+  def is_top_pile?
+    true
+  end
+end
+
+class BottomPile < Pile
+  def is_bottom_pile?
+    true
+  end
 end
 
 class Game
@@ -125,7 +171,6 @@ class Game
   end
 
   def draw
-#    @board.draw
   end
 end
 
@@ -133,19 +178,20 @@ class Board
   BORDER_COLOUR = '#F6D353'
   BORDER_WIDTH = 3
 
-  attr_accessor :deck, :piles, :source_pile, :target_pile
+  attr_accessor :deck, :piles, :source_pile, :source_pile_number, :target_pile
 
   def initialize
     @source_pile = nil
+    @source_pile_number = nil
     @target_pile = nil
     @card = nil
 
-    setup_board
+#    setup_board
   end
 
   def setup_board
     @deck = Deck.new
-    @piles = [@deck, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new] # ouch!
+    @piles = Array.new # [@deck, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new] # ouch!
     @piles[1] << Card.new(1, 0)
     @piles[2] << Card.new(2, 2)
     @piles[3] << Card.new(3, 1)
@@ -155,80 +201,33 @@ class Board
 end
 
 Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
-  def activate(pile_number)
-    @board.source_pile = @board.piles[pile_number]
-    @borders.each do |border|
-      border.hide
-    end
-    @borders[pile_number].show
-  end
+  STARTING_CARDS = [Card.new(1, 0), Card.new(2, 2), Card.new(3, 1), Card.new(4, 3)]
+  
+  def setup_board
+    @piles = Array.new # [@deck, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new, Pile.new] # ouch!
 
-  def deactivate(pile_number)
-    @board.source_pile = nil
-    @borders[pile_number].hide
-  end
+    clear
 
-  def play(pile_number)
-    card = @board.source_pile.card
-
-    if (1 .. 4) === pile_number
-      if @board.piles[pile_number].card.value + to == card.value
-        @board.piles[pile_number] << card
-        @images[pile_number] = card.image
-      else
-#        puts "Against the rules!"
-      end
-    elsif (5 .. 8) === pile_number
-      @board.piles[pile_number] << card
-      @images[pile_number] = card.image
-    else 
-#      puts "Wrong 'to' pile!"
-    end
-    deactivate(pile_number)
-  end
-
-  def action(pile_number)
-    pile_groups = [[0], [1, 2, 3, 4], [5, 6, 7, 8]]
-    if @board.source_pile.nil?
-      if pile_groups[0].include?(pile_number)
-        activate(pile_number)
-      elsif pile_groups[2].include?(pile_number) and !@board.piles[pile_number].empty?
-        activate(pile_number)
-      else
-        # incorrect move
-      end
-    elsif @board.source_pile == @board.deck
-      if pile_groups[0].include?(pile_number)
-        deactivate(pile_number)
-      else
-        play(pile_number)
-      end
-    else
-      if pile_groups[1].include?(pile_number)
-        play(pile_number)
-      elsif pile_groups[2].include?(pile_number)
-        activate(pile_number)
-      else
-        # incorrect move
-      end
-    end
-  end
-
-  $app = self
-#  @game = Game.new
-  @board = Board.new 
-  @borders = Array.new
-  @images = Array.new
-
-  stack :width => 1.0 do
+    stack :width => 1.0 do
     flow :top => 0.01, :left => 0.01 do
+      #top buttons
+      button 'Quit' do
+        exit
+      end
+
+      button 'New game', :left => 0.2 do
+        setup_board
+      end
+    end
+    flow :top => 0.2, :left => 0.01 do
       # top
       flow :width => 0.4 do
-        flow :width => Card::WIDTH, :height => Card::HEIGHT do 
+        flow :width => Card::WIDTH + 2 * Board::BORDER_WIDTH, :height => Card::HEIGHT + 2 * Board::BORDER_WIDTH do 
           # deck
-          @images[0] = image @board.deck.card.image
-          @borders[0] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
-          @borders[0].hide
+          @piles[0] = Deck.new(border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH)
+          flow :top => Board::BORDER_WIDTH, :left => Board::BORDER_WIDTH do
+            @piles[0].image = image @piles[0].card.image
+          end
           click do
             action(0)
           end
@@ -239,10 +238,12 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
         1.upto(4) do |i|
           left = (i - 1) * 0.2
           left += (i - 1) * 0.01 if i > 1
-          stack :left => left, :width => Card::WIDTH, :height => Card::HEIGHT do
-            @images[i] = image @board.piles[i].card.image
-            @borders[i] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
-            @borders[i].hide
+          stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH, :height => Card::HEIGHT + 2 * Board::BORDER_WIDTH do
+            @piles[i] = TopPile.new(border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH)
+            flow :top => Board::BORDER_WIDTH, :left => Board::BORDER_WIDTH do
+              @piles[i].image = image 'cards/empty.png' # fake image just to have something
+            end
+            @piles[i] << STARTING_CARDS[i - 1]
             click do
               action(i)
             end
@@ -251,15 +252,16 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
       end # end top piles
     end # end top
 
-    flow :top => 110, :left => 0.41, :width => 0.6 do
+    flow :top => 160, :left => 0.41, :width => 0.6 do
       # bottom
       5.upto(8) do |i|
         left = (i - 5) * 0.2
         left += (i - 5) * 0.01 if i - 5 > 0
-        stack :left => left, :width => Card::WIDTH, :height => Card::HEIGHT do
-          @images[i] = image 'cards/empty.png'
-          @borders[i] = border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH
-          @borders[i].hide
+        stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH, :height => Card::HEIGHT + 2 * Board::BORDER_WIDTH do
+          @piles[i] = BottomPile.new(border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH)
+          flow :top => Board::BORDER_WIDTH, :left => Board::BORDER_WIDTH do
+            @piles[i].image = image 'cards/empty.png'
+          end
           click do
             action(i)
           end
@@ -267,11 +269,97 @@ Shoes.app(:title => 'Calculate!', :width => 800, :height => 600) do
       end
     end # end bottom
   end
-
-  button 'Quit' do
-    exit
   end
 
+  def activate(pile_number)
+    @piles[pile_number].activate
+    @source_pile = @piles[pile_number]
+    @source_pile_number = pile_number
+  end
+
+  def deactivate
+    @source_pile.deactivate
+    @source_pile = nil
+    @source_pile_number = nil
+    @piles.each {|pile| pile.deactivate}
+  end
+
+  def incorrect_move
+    deactivate
+  end
+
+  def play(pile_number)
+    card = @source_pile.card
+
+    if (1 .. 4) === pile_number
+      Shoes.debug @piles[pile_number].card.value + pile_number
+      if @target_pile.card.value + pile_number == card.value
+        @target_pile << @source_pile.card!
+      else
+        incorrect_move
+      end
+    elsif (5 .. 8) === pile_number
+      @target_pile << @source_pile.card!
+    else 
+      incorrect_move
+    end
+
+    deactivate
+  end
+
+  def action(pile_number)
+    pile_groups = [[0], [1, 2, 3, 4], [5, 6, 7, 8]]
+    @target_pile = @piles[pile_number]
+
+    if @source_pile.nil?
+      if @target_pile.is_deck?
+        activate(pile_number)
+      elsif @target_pile.is_bottom_pile? and @target_pile.has_cards_left?
+        activate(pile_number)
+      else
+        incorrect_move
+      end
+    elsif @source_pile == @target_pile
+      deactivate
+    elsif @source_pile.is_deck?
+      if @target_pile.is_deck?
+        deactivate
+      else
+        play(pile_number)
+      end
+    else
+      if @target_pile.is_top_pile?
+        play(pile_number)
+      elsif @target_pile.is_bottom_pile?
+        deactivate
+        activate(pile_number)
+      else
+        incorrect_move
+      end
+    end
+  end
+
+  $app = self
+#  @game = Game.new
+#  @board = Board.new 
+
+  setup_board
+
+  #
+  # My testing area
+  #
+#  @test_stack = stack do
+#    para "My testing area"
+#    my_image = image 'cards/h1.png'
+#    image 'cards/h2.png' 
+#    image 'cards/h3.png'
+#
+#    button 'test' do
+#      @game = Game.new
+#      @game.draw
+#      @test_stack.border red, :strokewidth => 5
+#    end
+#  end
 
 =begin
 loop do
