@@ -176,17 +176,21 @@ class BottomPile < Pile
     @stack.style(:height => 2 * Board::BORDER_WIDTH + Card::HEIGHT + 20 * @cards.length)
     @border_stack.move(@border_stack.left, 20 * (@cards.length - 1))
     @image.path = @cards.last.image unless @image.nil?
+#    Shoes.debug "[<<] #{@all_images.collect{|i| i.path}.join(', ')}"
   end
 
   def card!
     card = @cards.pop
     @stack.style(:height => 2 * Board::BORDER_WIDTH + Card::HEIGHT + 20 * @cards.length)
     @border_stack.move(@border_stack.left, 20 * (@cards.length - 1))
+    last_image = @all_images.pop
+    last_image.remove unless last_image.nil?
     if @cards.empty?
       @image.path = 'cards/empty.png'
     else
       @image.path = @cards.last.image
     end
+#    Shoes.debug "[card!] #{@all_images.collect{|i| i.path}.join(', ')}"
     card
   end
 end
@@ -233,6 +237,8 @@ class Board
 end
 
 Shoes.app(:title => 'Calculate!', :width => 600, :height => 480) do
+#  Shoes.show_log
+
   STARTING_CARDS = [Card.new(1, 0), Card.new(2, 2), Card.new(3, 1), Card.new(4, 3)]
   
   def setup_board
@@ -289,17 +295,18 @@ Shoes.app(:title => 'Calculate!', :width => 600, :height => 480) do
         5.upto(8) do |i|
           left = (i - 5) * (Card::WIDTH + 2 * Board::BORDER_WIDTH)
           left += (i - 5) * 10 if i - 5 > 0
-          main_stack = stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH do
+          @main_stack = stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH do
 #            background red
-            @piles[i] = BottomPile.new(border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH)
-            @piles[i].stack = stack
-            @piles[i].border_stack = stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH, :height => Card::HEIGHT + 2 * Board::BORDER_WIDTH, :scroll => true do
+            @border_stack = stack :left => left, :width => Card::WIDTH + 2 * Board::BORDER_WIDTH, :height => Card::HEIGHT + 2 * Board::BORDER_WIDTH do
+              @piles[i] = BottomPile.new(border Board::BORDER_COLOUR, :strokewidth => Board::BORDER_WIDTH)
               @piles[i].image = image 'cards/empty.png', :top => Board::BORDER_WIDTH, :left => Board::BORDER_WIDTH
               click do
                 action(i)
               end
             end
           end # end stack
+          @piles[i].stack = @main_stack
+          @piles[i].border_stack = @border_stack
         end
       end # end bottom
     end
